@@ -7,6 +7,8 @@ import os
 # Initialize LLM
 llm = ChatGroq(
     model="openai/gpt-oss-120b"
+    api_key=st.secrets["GROQ_API_KEY"]
+
 )
 
 st.title("🤖 Groq AI Chatbot")
