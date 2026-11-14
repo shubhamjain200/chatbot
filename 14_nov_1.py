@@ -1,68 +1,69 @@
 
-from langchain_groq import ChatGroq
 import streamlit as st
+from langchain_groq import ChatGroq
 import joblib
 import os
 
-# Initialize LLM
+st.set_page_config(page_title="My AI Chatbot", page_icon="🤖")
+
+st.title("🤖 My AI Chatbot")
+
+# Initialize LLM with streaming
 llm = ChatGroq(
     model="openai/gpt-oss-120b",
-    api_key=st.secrets["GROQ_API_KEY"]
-
+    streaming=True
 )
 
-st.title("🤖 Groq AI Chatbot")
+# Load Chat History
+if "chat" not in st.session_state:
 
-# Load history
-if os.path.exists("history.pkl"):
-    chat = joblib.load("history.pkl")
-else:
-    chat = [
-        ("system", "You are a helpful assistant")
-    ]
+    if os.path.exists("history.pkl"):
+        st.session_state.chat = joblib.load("history.pkl")
+    else:
+        st.session_state.chat = [
+            ("system", "you are a helpful assistant")
+        ]
 
-# Initialize session state
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {
-            "role": "assistant",
-            "content": "Hello! How can I help you?"
-        }
-    ]
+# Display Previous Chat
+for role, message in st.session_state.chat:
 
-# Display previous messages
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.write(message["content"])
+    if role == "system":
+        continue
 
-# User input
+    if role == "ai":
+        with st.chat_message("assistant"):
+            st.write(message)
+
+    elif role == "user":
+        with st.chat_message("user"):
+            st.write(message)
+
+# User Input
 prompt = st.chat_input("Enter your prompt...")
 
 if prompt:
 
-    # Display user message
-    st.chat_message("user").write(prompt)
+    # Display User Message
+    with st.chat_message("user"):
+        st.write(prompt)
 
-    # Add to history
-    chat.append(("user", prompt))
+    st.session_state.chat.append(("user", prompt))
 
-    # Convert history to LangChain messages
-    response = llm.invoke(chat)
+    # Stream AI Response
+    with st.chat_message("assistant"):
 
-    llm_response = response.content
+        response_placeholder = st.empty()
+        full_response = ""
 
-    # Display AI response
-    st.chat_message("assistant").write(llm_response)
+        for chunk in llm.stream(st.session_state.chat):
 
-    # Update session state
-    st.session_state.messages.append(
-        {"role": "user", "content": prompt}
-    )
+            if chunk.content:
+                full_response += chunk.content
+                response_placeholder.markdown(full_response + "▌")
 
-    st.session_state.messages.append(
-        {"role": "assistant", "content": llm_response}
-    )
+        response_placeholder.markdown(full_response)
 
-    # Save conversation
-    chat.append(("assistant", llm_response))
-    joblib.dump(chat, "history.pkl")
+    # Save AI Response
+    st.session_state.chat.append(("ai", full_response))
+
+    joblib.dump(st.session_state.chat, "history.pkl")
